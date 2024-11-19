@@ -16,7 +16,7 @@ import zlib
 from flask import Flask, request, render_template
 
 from kent import __version__
-from kent.utils import parse_envelope
+from kent.utils import parse_envelope, CorsMiddleware
 
 
 dictConfig(
@@ -185,6 +185,7 @@ def create_app(test_config=None):
 
     app = Flask(__name__, instance_relative_config=True)
     app.config.from_mapping(SECRET_KEY="dev")
+    app.wsgi_app = CorsMiddleware(app.wsgi_app)
 
     if test_config is not None:
         app.config.from_mapping(test_config)
