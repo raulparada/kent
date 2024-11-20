@@ -2,34 +2,28 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-from dataclasses import dataclass
 import datetime
 import gzip
 import json
 import logging
-from logging.config import dictConfig
 import os
-from typing import Optional, Union
-import uuid
-import shutil
-import os
+import pathlib
 import platform
+import shutil
 import subprocess
-import webbrowser
-import pathlib
-import zlib
 import threading
-import pathlib
+import uuid
+import webbrowser
+import zlib
 from collections import namedtuple
+from dataclasses import dataclass
+from logging.config import dictConfig
+from typing import Optional, Union
 
-from flask import Flask, request, render_template
+from flask import Flask, render_template, request
 
 from kent import __version__
-from kent.utils import (
-    parse_envelope,
-    CorsMiddleware,
-    sentry_dsn_to_envelope_url,
-)
+from kent.utils import CorsMiddleware, parse_envelope, sentry_dsn_to_envelope_url
 
 LOGGER = logging.getLogger(__name__)
 
@@ -191,7 +185,6 @@ INTERESTING_HEADERS = [
 ]
 
 
-
 Project = namedtuple("Project", ["kent_project_id", "kent_alias", "real_dsn"])
 PROJECTS: dict[str, Project] = {}
 projects_file_env = os.environ.get("KENT_PROJECTS_FILE")
@@ -211,7 +204,10 @@ if projects_file.exists():
         """
         i, name, real_dsn = line.split(" ")
         PROJECTS[int(i)] = Project(int(i), name, real_dsn)
-    LOGGER.info("Projects: %s", json.dumps(PROJECTS))
+    LOGGER.info(
+        "Projects: %s",
+        json.dumps(PROJECTS, indent=2),
+    )
 elif projects_file_env:
     LOGGER.error("Specified projects file doesn't exist at %s", projects_file_env)
 
@@ -246,7 +242,7 @@ def notify(event: "Event", event_url: str):
         if not process.returncode:
             action = json.loads(process.stdout)
             value = action.get("activationValue")
-            if value == None:  # Clicked on notification.
+            if value is None:  # Clicked on notification.
                 webbrowser.open(event_url)
             elif value == RELAY_ACTION:  # Clicked on relay action.
                 relay_event(event.event_id)
@@ -286,13 +282,19 @@ def relay_event(event_id: str):
 
     real_dsn = project.real_dsn
     envelope_url = sentry_dsn_to_envelope_url(real_dsn)
-    LOGGER.info("Relaying event id=%s, dsn=%s, envelope=%s", event_id, real_dsn, envelope_url)
+    LOGGER.info(
+        "Relaying event id=%s, dsn=%s, envelope=%s", event_id, real_dsn, envelope_url
+    )
     relay_response = requests.post(
         envelope_url,
         headers=event.header,
         data=f"{json.dumps(event.envelope_header)}\n{json.dumps(event.header)}\n{json.dumps(event.body)}",
     )
-    LOGGER.info("Relay response envelope=%s, status=%s", envelope_url, relay_response.status_code)
+    LOGGER.info(
+        "Relay response envelope=%s, status=%s",
+        envelope_url,
+        relay_response.status_code,
+    )
     return relay_response.content, 201
 
 
