@@ -7,7 +7,7 @@ keywords = ["sentry", "integration service", "test"]
 authors = [{name = "Will Kahn-Greene"}]
 license = {text = "MPLv2"}
 requires-python = ">=3.9"
-dependencies = ["flask>3"]
+dependencies = ["flask>3", "requests"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
@@ -32,7 +32,6 @@ kent-testpost = "kent.cli_testpost:main"
 dev = [
     "build",
     "pytest",
-    "requests",
     "ruff",
     "sentry-sdk",
     "setuptools",
