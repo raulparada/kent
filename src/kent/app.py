@@ -16,7 +16,7 @@ import zlib
 from flask import Flask, request, render_template
 
 from kent import __version__
-from kent.utils import parse_envelope, CorsMiddleware
+from kent.utils import parse_envelope, CorsMiddleware, notify
 
 
 dictConfig(
@@ -344,6 +344,9 @@ def create_app(test_config=None):
             )
             app.logger.info("%s: project id: %s", event_id, project_id)
             app.logger.info("%s: url: %s", event_id, event_url)
+
+            # Notify listeners
+            notify(event)
 
         return {"success": True}
 

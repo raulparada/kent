@@ -5,10 +5,15 @@
 from dataclasses import dataclass
 import logging
 import json
-from typing import Union
+import subprocess
+from typing import Union, TYPE_CHECKING
+
+import platform
 
 from werkzeug.wrappers import Request
 
+if TYPE_CHECKING:
+    from kent.app import Event
 
 LOGGER = logging.getLogger(__name__)
 
@@ -100,22 +105,40 @@ def parse_envelope(body):
             end_index += 1
             continue
 
+
 class CorsMiddleware:
-    '''
+    """
     Minimal, allow-all CORS middleware.
-    '''
+    """
 
     def __init__(self, app):
         self.app = app
 
     def __call__(self, environ, start_response):
         def cors_response(status: str, response_headers: list, exc_info=None):
-                request = Request(environ)
-                if request.method == "OPTIONS":
-                    response_headers.append(("Access-Control-Allow-Origin", "*"))
-                    response_headers.append(("Access-Control-Allow-Headers", "*"))
-                    response_headers.append(("Access-Control-Allow-Methods", "*"))
-                else:
-                    response_headers.append(("Access-Control-Allow-Origin", "*"))
-                return start_response(status, response_headers, exc_info)
+            request = Request(environ)
+            if request.method == "OPTIONS":
+                response_headers.append(("Access-Control-Allow-Origin", "*"))
+                response_headers.append(("Access-Control-Allow-Headers", "*"))
+                response_headers.append(("Access-Control-Allow-Methods", "*"))
+            else:
+                response_headers.append(("Access-Control-Allow-Origin", "*"))
+            return start_response(status, response_headers, exc_info)
+
         return self.app(environ, cors_response)
+
+
+def notify(event: "Event"):
+    if platform.system() != "Darwin":
+        return
+    retcode = subprocess.call(
+        [
+            "osascript",
+            "-e",
+            f'display notification "{event.event_id}"'
+            f' with title "{event.project_id}"'
+            f' subtitle "{event.summary}"',
+        ]
+    )
+    if retcode:
+        LOGGER.error("failed sending notification for event %s", event.event_id)
