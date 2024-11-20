@@ -128,5 +128,5 @@ def sentry_dsn_to_envelope_url(dsn):
     parsed = urlparse(dsn)
     host = parsed.hostname
     if port := parsed.port:
-        host += ":" + port
+        host += ":" + str(port)
     return f"{parsed.scheme}://{host}/api/{parsed.path.lstrip('/')}/envelope/?sentry_key={parsed.username}"

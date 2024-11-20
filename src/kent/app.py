@@ -20,6 +20,7 @@ import pathlib
 import zlib
 import threading
 import pathlib
+from collections import namedtuple
 
 from flask import Flask, request, render_template
 
@@ -189,8 +190,17 @@ INTERESTING_HEADERS = [
     "X-Sentry-Auth",
 ]
 
-PROJECTS: dict[int, tuple[str, str]] = {}
-projects_file = pathlib.Path.home() / ".kent" / "projects"
+
+
+Project = namedtuple("Project", ["kent_project_id", "kent_alias", "real_dsn"])
+PROJECTS: dict[str, Project] = {}
+projects_file_env = os.environ.get("KENT_PROJECTS_FILE")
+if projects_file_env:
+    LOGGER.info("Using projects file at %s", projects_file_env)
+    projects_file = pathlib.Path(projects_file_env)
+else:
+    projects_file = pathlib.Path.home() / ".kent" / "projects"
+
 if projects_file.exists():
     for line in projects_file.read_text().splitlines():
         """
@@ -200,21 +210,25 @@ if projects_file.exists():
         ```
         """
         i, name, real_dsn = line.split(" ")
-        PROJECTS[int(i)] = (name, real_dsn)
+        PROJECTS[int(i)] = Project(int(i), name, real_dsn)
+    LOGGER.info("Projects: %s", json.dumps(PROJECTS))
+elif projects_file_env:
+    LOGGER.error("Specified projects file doesn't exist at %s", projects_file_env)
 
 
 def notify(event: "Event", event_url: str):
     if has_alerter:
         RELAY_ACTION = "Relay"
-        project = str(event.project_id)
-        if mapping := PROJECTS.get(event.project_id):
-            project = mapping[0]
+        project_name = str(event.project_id)
+        if project := PROJECTS.get(event.project_id):
+            project_name = project.kent_alias
+            assert project.kent_project_id == event.project_id
         # The following blocks until user interacts with notification.
         process = subprocess.run(
             [
                 "alerter",
                 "-title",
-                project,
+                project_name,
                 "-message",
                 str(event.summary),
                 "-actions",
@@ -232,10 +246,9 @@ def notify(event: "Event", event_url: str):
         if not process.returncode:
             action = json.loads(process.stdout)
             value = action.get("activationValue")
-            if value == None: # Clicked on notification.
+            if value == None:  # Clicked on notification.
                 webbrowser.open(event_url)
-            elif value == RELAY_ACTION: # Clicked on action.
-                print(f"Should relay to {real_dsn=} {event.body=}")
+            elif value == RELAY_ACTION:  # Clicked on relay action.
                 relay_event(event.event_id)
     else:
         # Fallback, basic notifications.
@@ -262,6 +275,7 @@ def relay_event(event_id: str):
 
     event = EVENTS.get_event(event_id)
     assert event, "No event?"
+
     project = PROJECTS.get(event.project_id)
     if not project:
         error_message = (
@@ -270,28 +284,31 @@ def relay_event(event_id: str):
         LOGGER.error(error_message)
         return error_message, 500
 
-    real_dsn = project[1]
+    real_dsn = project.real_dsn
     envelope_url = sentry_dsn_to_envelope_url(real_dsn)
-    LOGGER.info("Relaying event id=%s, dsn=%s", event_id, real_dsn)
-
+    LOGGER.info("Relaying event id=%s, dsn=%s, envelope=%s", event_id, real_dsn, envelope_url)
     relay_response = requests.post(
         envelope_url,
         headers=event.header,
         data=f"{json.dumps(event.envelope_header)}\n{json.dumps(event.header)}\n{json.dumps(event.body)}",
     )
-    LOGGER.debug("Relay response %s %s", envelope_url, relay_response.content)
+    LOGGER.info("Relay response envelope=%s, status=%s", envelope_url, relay_response.status_code)
     return relay_response.content, 201
 
 
-is_darwin = platform.system() == "Darwin"
-notifications_enabled = is_darwin and bool(
-    int(os.environ.get("KENT_NOTIFICATIONS", "1"))
-)
-has_alerter = shutil.which("alerter") is not None
-if not notifications_enabled:
+has_notifications_enabled = bool(int(os.environ.get("KENT_NOTIFICATIONS", "1")))
+if has_notifications_enabled:
+    is_darwin = platform.system() == "Darwin"
+    has_alerter = shutil.which("alerter") is not None
+    if not is_darwin:
+        LOGGER.error("Notifications only supported on Darwin, disabling.")
+        has_notifications_enabled = False
+    elif not has_alerter:
+        LOGGER.info(
+            "Get enhanced notification with https://github.com/vjeantet/alerter"
+        )
+else:
     LOGGER.warning("Notifications disabled.")
-elif not has_alerter:
-    LOGGER.info("Get enhanced notification with https://github.com/vjeantet/alerter")
 
 
 def create_app(test_config=None):
@@ -472,7 +489,7 @@ def create_app(test_config=None):
             app.logger.info("%s: url: %s", event_id, event_url)
 
             # Notify listeners.
-            if notifications_enabled:
+            if has_notifications_enabled:
                 notify_thread = threading.Thread(target=notify, args=(event, event_url))
                 notify_thread.start()
 
