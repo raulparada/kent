@@ -5,19 +5,11 @@
 from dataclasses import dataclass
 import logging
 import json
-import subprocess
-import shutil
-import webbrowser
-from typing import Union, TYPE_CHECKING
-import pathlib
-import os
+from typing import Union
 
-import platform
 
 from werkzeug.wrappers import Request
-
-if TYPE_CHECKING:
-    from kent.app import Event
+from urllib.parse import urlparse
 
 LOGGER = logging.getLogger(__name__)
 
@@ -132,55 +124,9 @@ class CorsMiddleware:
         return self.app(environ, cors_response)
 
 
-has_alerter = shutil.which("alerter") is not None
-if not has_alerter:
-    LOGGER.info("Get enhanced notification with https://github.com/vjeantet/alerter")
-
-is_darwin = platform.system() == "Darwin"
-notifications_enabled = is_darwin and bool(int(os.environ.get("KENT_NOTIFICATIONS", "1")))
-if not notifications_enabled:
-    LOGGER.warning("notifications disabled")
-
-PROJECTS = {}
-projects_file = pathlib.Path(".projects")
-if projects_file.exists():
-    for line in projects_file.read_text().splitlines():
-        i, name = line.split(" ")
-        PROJECTS[int(i)] = name
-
-def notify(event: "Event", event_url: str):
-    if has_alerter:
-        OPEN_ACTION = "Open"
-        # The following blocks until user interacts with notification or `TIMEOUT`.
-        process = subprocess.run(
-            [
-                "alerter",
-                "-title",
-                PROJECTS.get(event.project_id) or str(event.project_id),
-                "-message",
-                str(event.summary),
-                "-actions",
-                OPEN_ACTION,
-                "-json",
-                # Not working :/
-                # "-appIcon",
-                # "./src/kent/static/favicon.ico"
-            ],
-            capture_output=True,
-        )
-        if not process.returncode:
-            action = json.loads(process.stdout)
-            if action.get("activationValue") == OPEN_ACTION:
-                webbrowser.open(event_url)
-    else:
-        process = subprocess.run(
-            [
-                "osascript",
-                "-e",
-                f'display notification "{event.event_id}"'
-                f' with title "{event.project_id}"'
-                f' subtitle "{event.summary}"',
-            ]
-        )
-    if process.returncode:
-        LOGGER.error("failed sending notification for event %s", event.event_id)
+def sentry_dsn_to_envelope_url(dsn):
+    parsed = urlparse(dsn)
+    host = parsed.hostname
+    if port := parsed.port:
+        host += ":" + port
+    return f"{parsed.scheme}://{host}/api/{parsed.path.lstrip('/')}/envelope/?sentry_key={parsed.username}"

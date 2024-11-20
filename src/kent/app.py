@@ -11,14 +11,26 @@ from logging.config import dictConfig
 import os
 from typing import Optional, Union
 import uuid
+import shutil
+import os
+import platform
+import subprocess
+import webbrowser
+import pathlib
 import zlib
 import threading
+import pathlib
 
 from flask import Flask, request, render_template
 
 from kent import __version__
-from kent.utils import parse_envelope, CorsMiddleware, notify, notifications_enabled
+from kent.utils import (
+    parse_envelope,
+    CorsMiddleware,
+    sentry_dsn_to_envelope_url,
+)
 
+LOGGER = logging.getLogger(__name__)
 
 dictConfig(
     {
@@ -177,6 +189,110 @@ INTERESTING_HEADERS = [
     "X-Sentry-Auth",
 ]
 
+PROJECTS: dict[int, tuple[str, str]] = {}
+projects_file = pathlib.Path.home() / ".kent" / "projects"
+if projects_file.exists():
+    for line in projects_file.read_text().splitlines():
+        """
+        Format:
+        ```
+        <kent_project_id> <local_project_alias> <remote_project_dsn>
+        ```
+        """
+        i, name, real_dsn = line.split(" ")
+        PROJECTS[int(i)] = (name, real_dsn)
+
+
+def notify(event: "Event", event_url: str):
+    if has_alerter:
+        RELAY_ACTION = "Relay"
+        project = str(event.project_id)
+        if mapping := PROJECTS.get(event.project_id):
+            project = mapping[0]
+        # The following blocks until user interacts with notification.
+        process = subprocess.run(
+            [
+                "alerter",
+                "-title",
+                project,
+                "-message",
+                str(event.summary),
+                "-actions",
+                f"{RELAY_ACTION}",
+                "-json",
+                # Not working :/
+                # "-appIcon",
+                # "./src/kent/static/favicon.ico"
+            ],
+            capture_output=True,
+        )
+        # # BUG(raulparada): alerter returns this on 'show' (available when multiple actions).
+        # if process.returncode == 134:
+        #     return
+        if not process.returncode:
+            action = json.loads(process.stdout)
+            value = action.get("activationValue")
+            if value == None: # Clicked on notification.
+                webbrowser.open(event_url)
+            elif value == RELAY_ACTION: # Clicked on action.
+                print(f"Should relay to {real_dsn=} {event.body=}")
+                relay_event(event.event_id)
+    else:
+        # Fallback, basic notifications.
+        process = subprocess.run(
+            [
+                "osascript",
+                "-e",
+                f'display notification "{event.event_id}"'
+                f' with title "{event.project_id}"'
+                f' subtitle "{event.summary}"',
+            ]
+        )
+    if process.returncode:
+        LOGGER.error(
+            "Failed sending notification for event %s %s %s",
+            event.event_id,
+            process.returncode,
+            process.stdout,
+        )
+
+
+def relay_event(event_id: str):
+    import requests
+
+    event = EVENTS.get_event(event_id)
+    assert event, "No event?"
+    project = PROJECTS.get(event.project_id)
+    if not project:
+        error_message = (
+            f"Cannot relay event without project mapping for {event.project_id=}"
+        )
+        LOGGER.error(error_message)
+        return error_message, 500
+
+    real_dsn = project[1]
+    envelope_url = sentry_dsn_to_envelope_url(real_dsn)
+    LOGGER.info("Relaying event id=%s, dsn=%s", event_id, real_dsn)
+
+    relay_response = requests.post(
+        envelope_url,
+        headers=event.header,
+        data=f"{json.dumps(event.envelope_header)}\n{json.dumps(event.header)}\n{json.dumps(event.body)}",
+    )
+    LOGGER.debug("Relay response %s %s", envelope_url, relay_response.content)
+    return relay_response.content, 201
+
+
+is_darwin = platform.system() == "Darwin"
+notifications_enabled = is_darwin and bool(
+    int(os.environ.get("KENT_NOTIFICATIONS", "1"))
+)
+has_alerter = shutil.which("alerter") is not None
+if not notifications_enabled:
+    LOGGER.warning("Notifications disabled.")
+elif not has_alerter:
+    LOGGER.info("Get enhanced notification with https://github.com/vjeantet/alerter")
+
 
 def create_app(test_config=None):
     dev_mode = os.environ.get("KENT_DEV", "0") == "1"
@@ -219,6 +335,15 @@ def create_app(test_config=None):
             return {"error": f"Event {event_id} not found"}, 404
 
         return event.to_dict()
+
+    @app.route("/api/event/<event_id>/relay", methods=["GET", "POST"])
+    def api_event_relay(event_id):
+        # NOTE: This allows an inappropriate GET for the convenience of triggering from browser.
+        app.logger.info(f"GET /api/event/{event_id}/relay")
+        event = EVENTS.get_event(event_id)
+        if event is None:
+            return {"error": f"Event {event_id} not found"}, 404
+        return relay_event(event_id)
 
     @app.route("/api/eventlist/", methods=["GET"])
     def api_event_list_view():
