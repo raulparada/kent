@@ -10,6 +10,7 @@ import shutil
 import webbrowser
 from typing import Union, TYPE_CHECKING
 import pathlib
+import os
 
 import platform
 
@@ -131,15 +132,14 @@ class CorsMiddleware:
         return self.app(environ, cors_response)
 
 
-# Notifications only work through `alerter` (https://github.com/vjeantet/alerter)
-NOTIFIER = "alerter"
+has_alerter = shutil.which("alerter") is not None
+if not has_alerter:
+    LOGGER.info("Get enhanced notification with https://github.com/vjeantet/alerter")
+
 is_darwin = platform.system() == "Darwin"
-has_notifier = shutil.which(NOTIFIER) is not None
-notifications_enabled = is_darwin and has_notifier
+notifications_enabled = is_darwin and bool(int(os.environ.get("KENT_NOTIFICATIONS", "1")))
 if not notifications_enabled:
     LOGGER.warning("notifications disabled")
-if not has_notifier:
-    LOGGER.info("you can enable notifications by installing https://github.com/vjeantet/alerter.")
 
 PROJECTS = {}
 projects_file = pathlib.Path(".projects")
@@ -149,34 +149,38 @@ if projects_file.exists():
         PROJECTS[int(i)] = name
 
 def notify(event: "Event", event_url: str):
-    OPEN_ACTION = "Open"
-    TIMEOUT = 5
-    # The following blocks until user interacts with notification or `TIMEOUT`.
-    process = subprocess.run(
-        [
-            "alerter",
-            "-title",
-            PROJECTS.get(event.project_id) or str(event.project_id),
-            "-message",
-            str(event.summary),
-            "-actions",
-            OPEN_ACTION,
-            "-json",
-            "-group",
-            "kent",
-            "sender",
-            "kent",
-            "-timeout",
-            str(TIMEOUT),
-            # Not working :/
-            # "-appIcon",
-            # "./src/kent/static/favicon.ico"
-        ],
-        capture_output=True,
-    )
+    if has_alerter:
+        OPEN_ACTION = "Open"
+        # The following blocks until user interacts with notification or `TIMEOUT`.
+        process = subprocess.run(
+            [
+                "alerter",
+                "-title",
+                PROJECTS.get(event.project_id) or str(event.project_id),
+                "-message",
+                str(event.summary),
+                "-actions",
+                OPEN_ACTION,
+                "-json",
+                # Not working :/
+                # "-appIcon",
+                # "./src/kent/static/favicon.ico"
+            ],
+            capture_output=True,
+        )
+        if not process.returncode:
+            action = json.loads(process.stdout)
+            if action.get("activationValue") == OPEN_ACTION:
+                webbrowser.open(event_url)
+    else:
+        process = subprocess.run(
+            [
+                "osascript",
+                "-e",
+                f'display notification "{event.event_id}"'
+                f' with title "{event.project_id}"'
+                f' subtitle "{event.summary}"',
+            ]
+        )
     if process.returncode:
         LOGGER.error("failed sending notification for event %s", event.event_id)
-        return
-    action = json.loads(process.stdout)
-    if action.get("activationValue") == OPEN_ACTION:
-        webbrowser.open(event_url)
