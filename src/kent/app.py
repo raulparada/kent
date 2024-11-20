@@ -163,7 +163,7 @@ class EventManager:
             self.events.pop(0)
         return event
 
-    def get_event(self, event_id):
+    def get_event(self, event_id) -> Event | None:
         for event in self.events:
             if event.event_id == event_id:
                 return event
@@ -189,7 +189,7 @@ Project = namedtuple("Project", ["kent_project_id", "kent_alias", "real_dsn"])
 PROJECTS: dict[str, Project] = {}
 projects_file_env = os.environ.get("KENT_PROJECTS_FILE")
 if projects_file_env:
-    LOGGER.info("Using projects file at %s", projects_file_env)
+    LOGGER.info("using projects file at %s", projects_file_env)
     projects_file = pathlib.Path(projects_file_env)
 else:
     projects_file = pathlib.Path.home() / ".kent" / "projects"
@@ -209,10 +209,11 @@ if projects_file.exists():
         json.dumps(PROJECTS, indent=2),
     )
 elif projects_file_env:
-    LOGGER.error("Specified projects file doesn't exist at %s", projects_file_env)
+    LOGGER.error("Specified projects file does not exist at %s", projects_file_env)
 
 
 def notify(event: "Event", event_url: str):
+    LOGGER.warning(f"Starting notification for {event_url}")
     if has_alerter:
         RELAY_ACTION = "Relay"
         project_name = str(event.project_id)
@@ -275,27 +276,45 @@ def relay_event(event_id: str):
     project = PROJECTS.get(event.project_id)
     if not project:
         error_message = (
-            f"Cannot relay event without project mapping for {event.project_id=}"
+            f"cannot relay event without project mapping for {event.project_id=}"
         )
-        LOGGER.error(error_message)
-        return error_message, 500
+        LOGGER.error("%s: %s", event_id, error_message)
+        return error_message.title(), 500
 
     real_dsn = project.real_dsn
     envelope_url = sentry_dsn_to_envelope_url(real_dsn)
+
     LOGGER.info(
-        "Relaying event id=%s, dsn=%s, envelope=%s", event_id, real_dsn, envelope_url
+        "%s: relaying event, dsn=%s, envelope=%s", event_id, real_dsn, envelope_url
+    )
+
+    event_header = event.header or {"type": "event"}
+    event_envelope_header = event.envelope_header or {"type": "event"}
+    event_body = event.body or {}
+
+    data = f"{json.dumps(event_envelope_header)}\n{json.dumps(event_header)}\n{json.dumps(event_body)}"
+    LOGGER.debug(
+        "event_envelope_header=%s, event_header=%s", event_envelope_header, event_header
     )
     relay_response = requests.post(
         envelope_url,
-        headers=event.header,
-        data=f"{json.dumps(event.envelope_header)}\n{json.dumps(event.header)}\n{json.dumps(event.body)}",
+        headers=event_header,
+        data=data,
     )
     LOGGER.info(
-        "Relay response envelope=%s, status=%s",
+        "%s: relay response envelope=%s, status=%s, content=%s",
+        event_id,
         envelope_url,
         relay_response.status_code,
+        relay_response.content,
     )
-    return relay_response.content, 201
+    return {
+        "content": str(relay_response.content),
+        "status": relay_response.status_code,
+        "event_id": event_id,
+        "envelope_url": envelope_url,
+        "data": data,
+    }
 
 
 has_notifications_enabled = bool(int(os.environ.get("KENT_NOTIFICATIONS", "1")))
@@ -307,7 +326,7 @@ if has_notifications_enabled:
         has_notifications_enabled = False
     elif not has_alerter:
         LOGGER.info(
-            "Get enhanced notification with https://github.com/vjeantet/alerter"
+            "Get enhanced notifications with https://github.com/vjeantet/alerter"
         )
 else:
     LOGGER.warning("Notifications disabled.")
@@ -444,6 +463,11 @@ def create_app(test_config=None):
         app.logger.info("%s: project id: %s", event_id, project_id)
         app.logger.info("%s: url: %s", event_id, event_url)
 
+        # Notify listeners.
+        if has_notifications_enabled:
+            notify_thread = threading.Thread(target=notify, args=(event, event_url))
+            notify_thread.start()
+
         return {"success": True}
 
     @app.route("/api/<int:project_id>/envelope/", methods=["POST"])
@@ -464,6 +488,14 @@ def create_app(test_config=None):
 
         for item in parse_envelope(body):
             event_id = str(uuid.uuid4())
+
+            # item_type = item.header.get("type")
+            # if item_type in ("client_report", "sessions"):
+            #     LOGGER.info("%s: is a report of type %s", event_id, item_type)
+            #     if bool(int(os.environ.get("KENT_IGNORE_REPORTS", "1"))):
+            #         LOGGER.warning("%s: ignoring report", event_id)
+            #         continue
+
             event = EVENTS.add_event(
                 event_id=event_id,
                 project_id=project_id,
