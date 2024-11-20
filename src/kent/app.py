@@ -12,11 +12,12 @@ import os
 from typing import Optional, Union
 import uuid
 import zlib
+import threading
 
 from flask import Flask, request, render_template
 
 from kent import __version__
-from kent.utils import parse_envelope, CorsMiddleware, notify
+from kent.utils import parse_envelope, CorsMiddleware, notify, notifications_enabled
 
 
 dictConfig(
@@ -345,8 +346,10 @@ def create_app(test_config=None):
             app.logger.info("%s: project id: %s", event_id, project_id)
             app.logger.info("%s: url: %s", event_id, event_url)
 
-            # Notify listeners
-            notify(event)
+            # Notify listeners.
+            if notifications_enabled:
+                notify_thread = threading.Thread(target=notify, args=(event, event_url))
+                notify_thread.start()
 
         return {"success": True}
 
