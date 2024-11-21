@@ -215,17 +215,15 @@ elif projects_file_env:
 
 
 def notify(event: "Event", event_url: str):
-    LOGGER.warning(f"Starting notification for {event_url}")
+    LOGGER.info("%s: sending notification", event.event_id)
     if has_alerter:
         RELAY_ACTION = "Relay"
         project_name = str(event.project_id)
         if project := PROJECTS.get(event.project_id):
             project_name = project.kent_alias
             assert project.kent_project_id == event.project_id
-
         if level := event.body.get("level"):
             project_name = f"{project_name} [{level.upper()}]"
-
         # The following blocks until user interacts with notification.
         process = subprocess.run(
             [
@@ -266,13 +264,13 @@ def notify(event: "Event", event_url: str):
         )
     if process.returncode:
         LOGGER.error(
-            "Failed sending notification for event %s %s %s",
+            "%s: failed sending notification, code=%s stdout=%s",
             event.event_id,
             process.returncode,
             process.stdout,
         )
 
-def notify_maybe(event: Event, event_url: str):
+def thread_notify_maybe(event: Event, event_url: str):
     if has_notifications_enabled:
         notify_thread = threading.Thread(target=notify, args=(event, event_url))
         notify_thread.start()
@@ -472,7 +470,7 @@ def create_app(test_config=None):
         app.logger.info("%s: url: %s", event_id, event_url)
 
         # Notify listeners
-        notify_maybe(event, event_url)
+        thread_notify_maybe(event, event_url)
 
         return {"success": True}
 
@@ -496,10 +494,12 @@ def create_app(test_config=None):
             event_id = str(uuid.uuid4())
 
             item_type = item.header.get("type")
+            LOGGER.debug("%s: type: %s", event_id, item_type)
             if item_type in ("client_report", "sessions"):
-                LOGGER.info("%s: is a report of type %s", event_id, item_type)
-                if bool(int(os.environ.get("KENT_IGNORE_REPORTS", "1"))):
-                    LOGGER.warning("%s: ignoring report", event_id)
+                if os.environ.get("KENT_IGNORE_REPORTS", "1") == "1":
+                    LOGGER.warning(
+                        "%s: ignoring report of type `%s`", event_id, item_type
+                    )
                     continue
 
             event = EVENTS.add_event(
@@ -529,7 +529,7 @@ def create_app(test_config=None):
             app.logger.info("%s: url: %s", event_id, event_url)
 
             # Notify listeners
-            notify_maybe(event, event_url)
+            thread_notify_maybe(event, event_url)
 
         return {"success": True}
 
