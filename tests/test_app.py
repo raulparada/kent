@@ -2,10 +2,11 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import pytest
 import uuid
 
-from kent.app import create_app, Event
+import pytest
+
+from kent.app import Event, create_app
 
 
 @pytest.fixture
@@ -251,7 +252,7 @@ CSP_REPORT_NEW = [
             "disposition": "enforce",
             "documentURL": "https://test.example.com/",
             "effectiveDirective": "script-src",
-            "originalPolicy": "default-src 'self'; img-src 'self'; script-src 'self'; form-action 'self'; frame-ancestors 'self'; report-to csp-endpoint; report-uri http://public@public@localhost:5000/api/1/security/",
+            "originalPolicy": "default-src 'self'; img-src 'self'; script-src 'self'; form-action 'self'; frame-ancestors 'self'; report-to csp-endpoint; report-uri http://public@public@localhost:14765/api/1/security/",
             "referrer": "",
             "statusCode": 200,
         },

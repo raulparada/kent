@@ -5,10 +5,9 @@
 import os
 import sys
 
-import kent.app
-
 from flask import cli
 
+import kent.app
 
 os.environ["FLASK_APP"] = "kent.app"
 
@@ -27,7 +26,7 @@ def maybe_show_banner():
         cmd = cli.cli.get_command(ctx, name="run")
         parser = cmd.make_parser(ctx)
         opts, _, _ = parser.parse_args(args[1:])
-        port = opts.get("port", 5000)
+        port = opts.get("port", 14765)
         host = opts.get("host", "127.0.0.1")
 
         # Convert any adapter to localhost

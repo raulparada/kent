@@ -28,7 +28,7 @@ Backwards incompatible changes:
 
   Example::
 
-      curl http://localhost:5000/api/eventlist/
+      curl http://localhost:14765/api/eventlist/
       {"events":[{"event_id":"1b1211bb-a113-480c-a3c9-0c7e7aea5e27","project
       _id":1,"summary":"test error capture"}]}
 

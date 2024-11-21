@@ -39,4 +39,4 @@ clean:  ## Clean build artifacts
 .PHONY: testdocker
 testdocker:  ## Build Docker image and run it
 	docker build --no-cache -t kent:latest .
-	docker run --init --rm --publish 5000:5000 kent:latest run --host 0.0.0.0 --port 5000
+	docker run --init --rm --publish 14765:14765 kent:latest run --host 0.0.0.0 --port 14765

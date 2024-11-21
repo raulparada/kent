@@ -3,10 +3,10 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import argparse
-from importlib.metadata import version as metadata_version
 import logging
-from urllib.parse import urlparse
 import sys
+from importlib.metadata import version as metadata_version
+from urllib.parse import urlparse
 
 try:
     import requests
@@ -15,7 +15,7 @@ except ImportError:
     sys.exit(1)
 
 try:
-    from sentry_sdk import init, capture_exception, capture_message
+    from sentry_sdk import capture_exception, capture_message, init
 except ImportError:
     print("You need to have sentry_sdk installed.")
     sys.exit(1)
@@ -24,7 +24,7 @@ except ImportError:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--dsn", default="http://public@localhost:5000/1", help="SENTRY_DSN to use"
+        "--dsn", default="http://public@localhost:14765/1", help="SENTRY_DSN to use"
     )
     parser.add_argument(
         "kind",
