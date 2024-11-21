@@ -26,7 +26,9 @@ def maybe_show_banner():
         cmd = cli.cli.get_command(ctx, name="run")
         parser = cmd.make_parser(ctx)
         opts, _, _ = parser.parse_args(args[1:])
-        port = opts.get("port", 14765)
+        port = opts.get("port", "14765")
+        os.environ["FLASK_RUN_PORT"] = port
+
         host = opts.get("host", "127.0.0.1")
 
         # Convert any adapter to localhost

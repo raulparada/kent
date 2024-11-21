@@ -270,7 +270,7 @@ def notify(event: "Event", event_url: str):
             process.stdout,
         )
 
-def thread_notify_maybe(event: Event, event_url: str):
+def maybe_notify_thread(event: Event, event_url: str):
     if has_notifications_enabled:
         notify_thread = threading.Thread(target=notify, args=(event, event_url))
         notify_thread.start()
@@ -470,7 +470,7 @@ def create_app(test_config=None):
         app.logger.info("%s: url: %s", event_id, event_url)
 
         # Notify listeners
-        thread_notify_maybe(event, event_url)
+        maybe_notify_thread(event, event_url)
 
         return {"success": True}
 
@@ -529,7 +529,7 @@ def create_app(test_config=None):
             app.logger.info("%s: url: %s", event_id, event_url)
 
             # Notify listeners
-            thread_notify_maybe(event, event_url)
+            maybe_notify_thread(event, event_url)
 
         return {"success": True}
 
