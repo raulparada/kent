@@ -17,6 +17,15 @@
           window.location.reload();
         };
       }
+      
+      function toggleNotifications() {
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", window.location.origin + "/api/notifications/toggle");
+        xhr.send();
+        xhr.onload = function() {
+          window.location.reload();
+        };
+      }
     </script>
   </head>
   <body>
@@ -53,6 +62,12 @@
             </tbody>
           </table>
         {% endif %}
+
+        <h2>Notifications</h2>
+        <p>
+          Enabled: <code>{{ notifications|tojson }}</code>
+          <a href="#" onClick ="javascript:toggleNotifications()">[Toggle]</a>
+        </p>
 
         <h2>API</h2>
         <table>

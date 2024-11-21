@@ -322,11 +322,10 @@ def relay_event(event_id: str):
         "envelope_url": envelope_url,
     }
 
-
-has_notifications_enabled = bool(int(os.environ.get("KENT_NOTIFICATIONS", "1")))
+has_notifications_enabled = os.environ.get("KENT_NOTIFICATIONS", "1") == "1"
+is_darwin = platform.system() == "Darwin"
+has_alerter = shutil.which("alerter") is not None
 if has_notifications_enabled:
-    is_darwin = platform.system() == "Darwin"
-    has_alerter = shutil.which("alerter") is not None
     if not is_darwin:
         LOGGER.error("Notifications only supported on Darwin, disabling.")
         has_notifications_enabled = False
@@ -368,6 +367,7 @@ def create_app(test_config=None):
             host=host,
             dsn=dsn,
             events=EVENTS.get_events(),
+            notifications=has_notifications_enabled,
             version=__version__,
         )
 
@@ -407,6 +407,13 @@ def create_app(test_config=None):
         app.logger.info("POST /api/flush")
         EVENTS.flush()
         return {"success": True}
+
+    @app.route("/api/notifications/toggle", methods=["POST"])
+    def api_notifications_toggle():
+        app.logger.info("POST /notifications/toggle")
+        global has_notifications_enabled
+        has_notifications_enabled = not has_notifications_enabled
+        return {"enabled": has_notifications_enabled}
 
     def log_headers(dev_mode, error_id, headers):
         # Log headers
