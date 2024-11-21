@@ -8,12 +8,7 @@ import json
 import logging
 import os
 import pathlib
-import platform
-import shutil
-import subprocess
-import threading
 import uuid
-import webbrowser
 import zlib
 from collections import namedtuple
 from dataclasses import dataclass
@@ -21,7 +16,7 @@ from logging.config import dictConfig
 from typing import Optional, Union
 
 import requests
-from flask import Flask, render_template, request
+from flask import Flask, Response, render_template, request
 
 from kent import __version__
 from kent.utils import CorsMiddleware, parse_envelope, sentry_dsn_to_envelope_url
@@ -140,13 +135,15 @@ class Event:
             },
         }
 
+import queue
+
 
 class EventManager:
     MAX_EVENTS = 100
 
     def __init__(self):
-        # List of Event instances
-        self.events = []
+        self.events: list[Event] = []
+        self.queue: queue.Queue[Event] = queue.Queue(100)
 
     def add_event(
         self, event_id, project_id, envelope_header=None, header=None, body=None
@@ -159,6 +156,7 @@ class EventManager:
             body=body,
         )
         self.events.append(event)
+        self.queue.put(event)
 
         while len(self.events) > self.MAX_EVENTS:
             self.events.pop(0)
@@ -172,6 +170,11 @@ class EventManager:
 
     def get_events(self):
         return self.events
+
+    def get_queue(self):
+        while not self.queue.empty():
+            event = self.queue.get()
+            yield f"data: {json.dumps(event.to_dict())}\n\n"
 
     def flush(self):
         self.events = []
@@ -213,67 +216,6 @@ if projects_file.exists():
 elif projects_file_env:
     LOGGER.error("Projects: file specified does not exist at %s", projects_file_env)
 
-
-def notify(event: "Event", event_url: str):
-    LOGGER.info("%s: sending notification", event.event_id)
-    if has_alerter:
-        RELAY_ACTION = "Relay"
-        project_name = str(event.project_id)
-        if project := PROJECTS.get(event.project_id):
-            project_name = project.kent_alias
-            assert project.kent_project_id == event.project_id
-        if level := event.body.get("level"):
-            project_name = f"{project_name} [{level.upper()}]"
-        # The following blocks until user interacts with notification.
-        process = subprocess.run(
-            [
-                "alerter",
-                "-title",
-                project_name,
-                "-message",
-                str(event.summary),
-                "-actions",
-                f"{RELAY_ACTION}",
-                "-json",
-                # Not working :/
-                # "-appIcon",
-                # "./src/kent/static/favicon.ico"
-            ],
-            capture_output=True,
-        )
-        # # BUG(raulparada): alerter returns this on 'show' (available when multiple actions).
-        # if process.returncode == 134:
-        #     return
-        if not process.returncode:
-            action = json.loads(process.stdout)
-            value = action.get("activationValue")
-            if value is None:  # Clicked on notification.
-                webbrowser.open(event_url)
-            elif value == RELAY_ACTION:  # Clicked on relay action.
-                relay_event(event.event_id)
-    else:
-        # Fallback, basic notifications.
-        process = subprocess.run(
-            [
-                "osascript",
-                "-e",
-                f'display notification "{event.event_id}"'
-                f' with title "{event.project_id}"'
-                f' subtitle "{event.summary}"',
-            ]
-        )
-    if process.returncode:
-        LOGGER.error(
-            "%s: failed sending notification, code=%s stdout=%s",
-            event.event_id,
-            process.returncode,
-            process.stdout,
-        )
-
-def maybe_notify_thread(event: Event, event_url: str):
-    if has_notifications_enabled:
-        notify_thread = threading.Thread(target=notify, args=(event, event_url))
-        notify_thread.start()
 
 def relay_event(event_id: str):
     event = EVENTS.get_event(event_id)
@@ -322,18 +264,9 @@ def relay_event(event_id: str):
         "envelope_url": envelope_url,
     }
 
+
 has_notifications_enabled = os.environ.get("KENT_NOTIFICATIONS", "1") == "1"
-is_darwin = platform.system() == "Darwin"
-has_alerter = shutil.which("alerter") is not None
-if has_notifications_enabled:
-    if not is_darwin:
-        LOGGER.error("Notifications only supported on Darwin, disabling.")
-        has_notifications_enabled = False
-    elif not has_alerter:
-        LOGGER.info(
-            "Get enhanced notifications with https://github.com/vjeantet/alerter"
-        )
-else:
+if not has_notifications_enabled:
     LOGGER.warning("Notifications disabled.")
 
 
@@ -370,6 +303,11 @@ def create_app(test_config=None):
             notifications=has_notifications_enabled,
             version=__version__,
         )
+
+    @app.route("/sse/events")
+    def sse_events():
+        LOGGER.info("Handling sse context.")
+        return Response(EVENTS.get_queue(), mimetype="text/event-stream")
 
     @app.route("/api/event/<event_id>", methods=["GET"])
     def api_event_view(event_id):
@@ -476,9 +414,6 @@ def create_app(test_config=None):
         app.logger.info("%s: project id: %s", event_id, project_id)
         app.logger.info("%s: url: %s", event_id, event_url)
 
-        # Notify listeners
-        maybe_notify_thread(event, event_url)
-
         return {"success": True}
 
     @app.route("/api/<int:project_id>/envelope/", methods=["POST"])
@@ -534,9 +469,6 @@ def create_app(test_config=None):
             )
             app.logger.info("%s: project id: %s", event_id, project_id)
             app.logger.info("%s: url: %s", event_id, event_url)
-
-            # Notify listeners
-            maybe_notify_thread(event, event_url)
 
         return {"success": True}
 
