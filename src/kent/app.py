@@ -220,6 +220,10 @@ def notify(event: "Event", event_url: str):
         if project := PROJECTS.get(event.project_id):
             project_name = project.kent_alias
             assert project.kent_project_id == event.project_id
+
+        if level := event.body.get("level"):
+            project_name = f"{project_name} [{level.upper()}]"
+
         # The following blocks until user interacts with notification.
         process = subprocess.run(
             [
@@ -266,6 +270,10 @@ def notify(event: "Event", event_url: str):
             process.stdout,
         )
 
+def notify_maybe(event: Event, event_url: str):
+    if has_notifications_enabled:
+        notify_thread = threading.Thread(target=notify, args=(event, event_url))
+        notify_thread.start()
 
 def relay_event(event_id: str):
     import requests
@@ -288,6 +296,7 @@ def relay_event(event_id: str):
         "%s: relaying event, dsn=%s, envelope=%s", event_id, real_dsn, envelope_url
     )
 
+    # Seems weird having to use these default, but it's needed, apparently.
     event_header = event.header or {"type": "event"}
     event_envelope_header = event.envelope_header or {"type": "event"}
     event_body = event.body or {}
@@ -463,10 +472,8 @@ def create_app(test_config=None):
         app.logger.info("%s: project id: %s", event_id, project_id)
         app.logger.info("%s: url: %s", event_id, event_url)
 
-        # Notify listeners.
-        if has_notifications_enabled:
-            notify_thread = threading.Thread(target=notify, args=(event, event_url))
-            notify_thread.start()
+        # Notify listeners
+        notify_maybe(event, event_url)
 
         return {"success": True}
 
@@ -489,12 +496,12 @@ def create_app(test_config=None):
         for item in parse_envelope(body):
             event_id = str(uuid.uuid4())
 
-            # item_type = item.header.get("type")
-            # if item_type in ("client_report", "sessions"):
-            #     LOGGER.info("%s: is a report of type %s", event_id, item_type)
-            #     if bool(int(os.environ.get("KENT_IGNORE_REPORTS", "1"))):
-            #         LOGGER.warning("%s: ignoring report", event_id)
-            #         continue
+            item_type = item.header.get("type")
+            if item_type in ("client_report", "sessions"):
+                LOGGER.info("%s: is a report of type %s", event_id, item_type)
+                if bool(int(os.environ.get("KENT_IGNORE_REPORTS", "1"))):
+                    LOGGER.warning("%s: ignoring report", event_id)
+                    continue
 
             event = EVENTS.add_event(
                 event_id=event_id,
@@ -522,10 +529,8 @@ def create_app(test_config=None):
             app.logger.info("%s: project id: %s", event_id, project_id)
             app.logger.info("%s: url: %s", event_id, event_url)
 
-            # Notify listeners.
-            if has_notifications_enabled:
-                notify_thread = threading.Thread(target=notify, args=(event, event_url))
-                notify_thread.start()
+            # Notify listeners
+            notify_maybe(event, event_url)
 
         return {"success": True}
 
