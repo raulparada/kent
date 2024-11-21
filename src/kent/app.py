@@ -195,6 +195,7 @@ else:
     projects_file = pathlib.Path.home() / ".kent" / "projects"
 
 if projects_file.exists():
+    LOGGER.info("Loading projects from %s", str(projects_file.absolute()))
     for line in projects_file.read_text().splitlines():
         """
         Format:
@@ -203,11 +204,8 @@ if projects_file.exists():
         ```
         """
         i, name, real_dsn = line.split(" ")
+        LOGGER.info("{:>3}: {:20} -> {}".format(i, name, real_dsn))
         PROJECTS[int(i)] = Project(int(i), name, real_dsn)
-    LOGGER.info(
-        "Projects: %s",
-        json.dumps(PROJECTS, indent=2),
-    )
 elif projects_file_env:
     LOGGER.error("Specified projects file does not exist at %s", projects_file_env)
 
