@@ -37,6 +37,16 @@
           <h5><a href="https://github.com/raulparada/kent">raulparada's fork</a></h5>
         </hgroup>
 
+        <p>
+          <b>Notifications:</b>
+          {% if notifications %}
+          <span style="color: green;">enabled</span>
+          {% else %}
+          <span style="color: red;">disabled</spanb>
+          {% endif %}
+          <a href="#" onClick ="javascript:toggleNotifications()">[Toggle]</a>
+        </p>
+
         <h2>Events</h2>
         <p>
           There are {{ events|count }} events in memory.
@@ -62,12 +72,6 @@
             </tbody>
           </table>
         {% endif %}
-
-        <h2>Notifications</h2>
-        <p>
-          Enabled: <code>{{ notifications|tojson }}</code>
-          <a href="#" onClick ="javascript:toggleNotifications()">[Toggle]</a>
-        </p>
 
         <h2>API</h2>
         <table>
