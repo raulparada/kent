@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from logging.config import dictConfig
 from typing import Optional, Union
 
+import requests
 from flask import Flask, render_template, request
 
 from kent import __version__
@@ -189,13 +190,12 @@ Project = namedtuple("Project", ["kent_project_id", "kent_alias", "real_dsn"])
 PROJECTS: dict[str, Project] = {}
 projects_file_env = os.environ.get("KENT_PROJECTS_FILE")
 if projects_file_env:
-    LOGGER.info("using projects file at %s", projects_file_env)
     projects_file = pathlib.Path(projects_file_env)
 else:
     projects_file = pathlib.Path.home() / ".kent" / "projects"
 
 if projects_file.exists():
-    LOGGER.info("Loading projects from %s", str(projects_file.absolute()))
+    LOGGER.info("Projects: loading from %s", str(projects_file.absolute()))
     for line in projects_file.read_text().splitlines():
         """
         Format:
@@ -203,11 +203,15 @@ if projects_file.exists():
         <kent_project_id> <local_project_alias> <remote_project_dsn>
         ```
         """
+        if not line.strip():  # Allow empty lines.
+            continue
+        if line.strip().startswith("#"):  # Allow #-comments.
+            continue
         i, name, real_dsn = line.split(" ")
         LOGGER.info("{:>3}: {:20} -> {}".format(i, name, real_dsn))
         PROJECTS[int(i)] = Project(int(i), name, real_dsn)
 elif projects_file_env:
-    LOGGER.error("Specified projects file does not exist at %s", projects_file_env)
+    LOGGER.error("Projects: file specified does not exist at %s", projects_file_env)
 
 
 def notify(event: "Event", event_url: str):
@@ -274,8 +278,6 @@ def notify_maybe(event: Event, event_url: str):
         notify_thread.start()
 
 def relay_event(event_id: str):
-    import requests
-
     event = EVENTS.get_event(event_id)
     assert event, "No event?"
 
