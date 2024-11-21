@@ -316,11 +316,10 @@ def relay_event(event_id: str):
         relay_response.content,
     )
     return {
-        "content": str(relay_response.content),
+        "content": relay_response.json(),
         "status": relay_response.status_code,
         "event_id": event_id,
         "envelope_url": envelope_url,
-        "data": data,
     }
 
 
