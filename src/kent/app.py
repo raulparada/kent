@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import pathlib
+import queue
 import uuid
 import zlib
 from collections import namedtuple
@@ -135,7 +136,6 @@ class Event:
             },
         }
 
-import queue
 
 
 class EventManager:
@@ -189,7 +189,7 @@ INTERESTING_HEADERS = [
 ]
 
 
-Project = namedtuple("Project", ["kent_project_id", "kent_alias", "real_dsn"])
+Project = namedtuple("Project", ["kent_project_id", "kent_alias", "sentry_dsn"])
 PROJECTS: dict[str, Project] = {}
 projects_file_env = os.environ.get("KENT_PROJECTS_FILE")
 if projects_file_env:
@@ -210,9 +210,9 @@ if projects_file.exists():
             continue
         if line.strip().startswith("#"):  # Allow #-comments.
             continue
-        i, name, real_dsn = line.split(" ")
-        LOGGER.info("{:>3}: {:20} -> {}".format(i, name, real_dsn))
-        PROJECTS[int(i)] = Project(int(i), name, real_dsn)
+        i, name, sentry_dsn = line.split(" ")
+        LOGGER.info("{:>3}: {:20} -> {}".format(i, name, sentry_dsn))
+        PROJECTS[int(i)] = Project(int(i), name, sentry_dsn)
 elif projects_file_env:
     LOGGER.error("Projects: file specified does not exist at %s", projects_file_env)
 
@@ -229,11 +229,11 @@ def relay_event(event_id: str):
         LOGGER.error("%s: %s", event_id, error_message)
         return error_message.title(), 500
 
-    real_dsn = project.real_dsn
-    envelope_url = sentry_dsn_to_envelope_url(real_dsn)
+    sentry_dsn = project.sentry_dsn
+    envelope_url = sentry_dsn_to_envelope_url(sentry_dsn)
 
     LOGGER.info(
-        "%s: relaying event, dsn=%s, envelope=%s", event_id, real_dsn, envelope_url
+        "%s: relaying event, dsn=%s, envelope=%s", event_id, sentry_dsn, envelope_url
     )
 
     # Seems weird having to use these default, but it's needed, apparently.
@@ -293,13 +293,16 @@ def create_app(test_config=None):
     @app.route("/", methods=["GET"])
     def index_view():
         host = request.scheme + "://" + request.headers["host"]
-        dsn = request.scheme + "://public@" + request.headers["host"] + "/1"
+        dsn = request.scheme + "://public@" + request.headers["host"]
+        dsn_example = dsn + "/1"
 
         return render_template(
             "index.html",
             host=host,
             dsn=dsn,
+            dsn_example=dsn_example,
             events=EVENTS.get_events(),
+            projects=list(PROJECTS.values()),
             notifications=has_notifications_enabled,
             version=__version__,
         )

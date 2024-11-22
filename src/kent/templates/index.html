@@ -10,8 +10,19 @@
   <link rel="stylesheet" type="text/css" href="/static/pico.1.5.3.min.css" />
   <link rel="stylesheet" type="text/css" href="/static/style.css" />
   <script>
+    if (!("Notification" in window)) {
+      alert("This browser does not support desktop notifications! consider Chrome.");
+    }
     const notificationsEnabled = {{ notifications|tojson }}
+    const projects = JSON.parse(`{{ projects|tojson }}`)
+
+    
     console.log("Notifications:", notificationsEnabled)
+    console.log("Projects:", projects)
+
+    if (notificationsEnabled && Notification.permission !== "granted") {
+      Notification.requestPermission();
+    }
 
     function flush() {
       const xhr = new XMLHttpRequest();
@@ -21,8 +32,8 @@
         window.location.reload();
       };
     }
-    
-    function toggleNotifications() { 
+
+    function toggleNotifications() {
       const xhr = new XMLHttpRequest();
       xhr.open("POST", window.location.origin + "/api/notifications/toggle");
       xhr.send();
@@ -42,8 +53,14 @@
       eventSource.onmessage = function (event) {
         const e = JSON.parse(event.data)
         console.log("New event", e);
+        const project = projects.find(p => p[0] === e.project_id)
+        const projectName = project[1]
+        const message = e.payload.body.message
+        const level = e.payload.body.level
+        const title = `${projectName.toUpperCase()} (${level})`
         if (notificationsEnabled) {
-          new Notification(e.payload.body.message);
+          const n = new Notification(title, { body: message, actions: [{action: "relay", title: "Relay"}] });
+          console.log("Dispatched notification", n)
         }
         window.location.reload();
       };
@@ -85,13 +102,37 @@
           <th scope="col">summary</th>
         </tr>
       </thead>
-      <tbody id="events-rows">
+      <tbody>
         {% for event in events %}
         <tr>
           <td scope="row"><small>{{ event.timestamp }}</small></td>
           <td class="nowrap"><small><a href="/api/event/{{ event.event_id }}">{{ event.project_id }}: {{ event.event_id
                 }}</a><small></td>
           <td><small>{{ event.summary }}</small></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+
+    {% if projects %}
+    <h2>Projects</h2>
+    <table class="summary" role="grid">
+      <thead>
+        <tr>
+          <th scope="col">kent_project_id</th>
+          <th scope="col">kent_dsn</th>
+          <th scope="col">kent_alias</th>
+          <th scope="col">sentry_dsn</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for project in projects %}
+        <tr>
+          <td scope="row"><small>{{ project.kent_project_id }}</small></td>
+          <td scope="row"><small>{{ dsn }}/{{ project.kent_project_id }}</small></td>
+          <td class="nowrap"><small>{{ project.kent_alias }}<small></td>
+          <td><small>{{ project.sentry_dsn }}</small></td>
         </tr>
         {% endfor %}
       </tbody>
@@ -107,7 +148,7 @@
       <tr>
         <td class="nowrap">Sentry DSN</td>
         <td>
-          <p><code>GET {{ dsn }}</code></p>
+          <p><code>GET {{ dsn_example }}</code></p>
           <p>Returns no payload.</p>
           <p>
             If you're running this in a Docker container and the service
