@@ -8,7 +8,7 @@
   <title>Kent: Fake Sentry</title>
   <link rel="manifest" href="/static/manifest.json" />
   <link rel="icon" type="image/png" href="/static/favicon.ico" />
-  <link rel="icon" type="image/png" href="{{ url_for('static', filename='pngtest.png') }}" />
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.ico') }}" />
   <link rel="stylesheet" type="text/css" href="/static/pico.1.5.3.min.css" />
   <link rel="stylesheet" type="text/css" href="/static/style.css" />
   <script src="{{ url_for('static', filename='sw.js') }}"></script>
@@ -66,7 +66,7 @@
             // https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerRegistration/showNotification
             registration.showNotification(title, {
               body: message,
-              // icon: "/static/favicon.ico",
+              icon: "/static/favicon.ico",
               badge: "/static/favicon.ico",
               data: {url: `${self.location.origin}/api/event/${e.event_id}`, event: e},
               tag: e.event_id, // TODO: add stacking option.
@@ -228,6 +228,7 @@
 </code></pre>
       </tr>
     </table>
+    </div>
   </main>
   <footer class="container">
     <small>

@@ -80,6 +80,7 @@ class Event:
     # attachments will be stored as bytes, non-attachments as python
     # datastructures
     body: Optional[Union[dict, bytes]] = None
+    relayed: bool = False
 
     @property
     def summary(self):
@@ -136,6 +137,62 @@ class Event:
             },
         }
 
+    def relay(self) -> Response:
+        if self.relayed:
+            return {"error": "Already relayed"}, 409
+
+        project = PROJECTS.get(self.project_id)
+        if not project:
+            error_message = (
+                f"cannot relay event without project mapping for {self.project_id=}"
+            )
+            LOGGER.error("%s: %s", self.event_id, error_message)
+            return {"error": error_message.title()}, 500
+
+        sentry_dsn = project.sentry_dsn
+        envelope_url = sentry_dsn_to_envelope_url(sentry_dsn)
+
+        LOGGER.info(
+            "%s: relaying event, dsn=%s, envelope=%s",
+            self.event_id,
+            sentry_dsn,
+            envelope_url,
+        )
+
+        # Seems weird having to use these defaults, but it's apparently needed.
+        event_header = self.header or {"type": "event"}
+        event_envelope_header = self.envelope_header or {"type": "event"}
+        event_body = self.body or {}
+
+        data = f"{json.dumps(event_envelope_header)}\n{json.dumps(event_header)}\n{json.dumps(event_body)}"
+        LOGGER.debug(
+            "event_envelope_header=%s, event_header=%s",
+            event_envelope_header,
+            event_header,
+        )
+        relay_response = requests.post(
+            envelope_url,
+            headers=event_header,
+            data=data,
+        )
+        if relay_response.ok:
+            if relay_response.json().get("id"):
+                self.relayed = True
+            else:
+                LOGGER.error("Relay returned no id (means likely not ingested).")
+        LOGGER.info(
+            "%s: relay response envelope=%s, status=%s, content=%s",
+            self.event_id,
+            envelope_url,
+            relay_response.status_code,
+            relay_response.content,
+        )
+        return {
+            "event_id": self.event_id,
+            "envelope_url": envelope_url,
+            "relay_status": relay_response.status_code,
+            "relay_content": relay_response.json(),
+        }, 201
 
 
 class EventManager:
@@ -221,56 +278,8 @@ elif projects_file_env:
     LOGGER.error("Projects: file specified does not exist at %s", projects_file_env)
 
 
-def relay_event(event_id: str):
-    event = EVENTS.get_event(event_id)
-    assert event, "No event?"
-
-    project = PROJECTS.get(event.project_id)
-    if not project:
-        error_message = (
-            f"cannot relay event without project mapping for {event.project_id=}"
-        )
-        LOGGER.error("%s: %s", event_id, error_message)
-        return error_message.title(), 500
-
-    sentry_dsn = project.sentry_dsn
-    envelope_url = sentry_dsn_to_envelope_url(sentry_dsn)
-
-    LOGGER.info(
-        "%s: relaying event, dsn=%s, envelope=%s", event_id, sentry_dsn, envelope_url
-    )
-
-    # Seems weird having to use these default, but it's needed, apparently.
-    event_header = event.header or {"type": "event"}
-    event_envelope_header = event.envelope_header or {"type": "event"}
-    event_body = event.body or {}
-
-    data = f"{json.dumps(event_envelope_header)}\n{json.dumps(event_header)}\n{json.dumps(event_body)}"
-    LOGGER.debug(
-        "event_envelope_header=%s, event_header=%s", event_envelope_header, event_header
-    )
-    relay_response = requests.post(
-        envelope_url,
-        headers=event_header,
-        data=data,
-    )
-    LOGGER.info(
-        "%s: relay response envelope=%s, status=%s, content=%s",
-        event_id,
-        envelope_url,
-        relay_response.status_code,
-        relay_response.content,
-    )
-    return {
-        "content": relay_response.json(),
-        "status": relay_response.status_code,
-        "event_id": event_id,
-        "envelope_url": envelope_url,
-    }
-
-
-has_notifications_enabled = os.environ.get("KENT_NOTIFICATIONS", "1") == "1"
-if not has_notifications_enabled:
+notifications_enabled = os.environ.get("KENT_NOTIFICATIONS", "1") == "1"
+if not notifications_enabled:
     LOGGER.warning("Notifications disabled.")
 
 
@@ -310,7 +319,7 @@ def create_app(test_config=None):
             projects=PROJECTS,
             # FIXME deduplicate this.
             projects_list=list(PROJECTS.values()),
-            notifications=has_notifications_enabled,
+            notifications=notifications_enabled,
             version=__version__,
         )
 
@@ -344,7 +353,7 @@ def create_app(test_config=None):
         event = EVENTS.get_event(event_id)
         if event is None:
             return {"error": f"Event {event_id} not found"}, 404
-        return relay_event(event_id)
+        return event.relay()
 
     @app.route("/api/eventlist/", methods=["GET"])
     def api_event_list_view():
@@ -367,10 +376,10 @@ def create_app(test_config=None):
 
     @app.route("/api/notifications/toggle", methods=["POST"])
     def api_notifications_toggle():
-        app.logger.info("POST /notifications/toggle")
-        global has_notifications_enabled
-        has_notifications_enabled = not has_notifications_enabled
-        return {"enabled": has_notifications_enabled}
+        app.logger.info("POST /api/notifications/toggle")
+        global notifications_enabled
+        notifications_enabled = not notifications_enabled
+        return {"enabled": notifications_enabled}
 
     def log_headers(dev_mode, error_id, headers):
         # Log headers
