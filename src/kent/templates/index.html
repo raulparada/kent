@@ -6,7 +6,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   <title>Kent: Fake Sentry</title>
+  <link rel="manifest" href="/static/manifest.json" />
   <link rel="icon" type="image/png" href="/static/favicon.ico" />
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='pngtest.png') }}" />
   <link rel="stylesheet" type="text/css" href="/static/pico.1.5.3.min.css" />
   <link rel="stylesheet" type="text/css" href="/static/style.css" />
   <script src="{{ url_for('static', filename='sw.js') }}"></script>
@@ -24,23 +26,7 @@
 
     function notify() {
       console.log("on function notify")
-      navigator.serviceWorker.ready.then((registration) => {
-        console.log("on service worker notify")
-
-        // https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerRegistration/showNotification
-        registration.showNotification("test-message", {
-          body: "test-body",
-          icon: "/static/favicon.ico",
-          badge: "/static/favicon.ico",
-          data: "test-data",
-          tag: "test-tag",
-          vibrate: [200, 100, 200, 100, 200, 100, 200],
-          actions: [{
-            action: "relay",
-            title:"Relay"
-          }]
-        });
-      });
+      
     }
 
 
@@ -70,12 +56,8 @@
     }
 
     document.addEventListener('DOMContentLoaded', function () {
-      // window.Notification.requestPermission();
 
       const eventSource = new EventSource('/sse/events');
-      // eventSource.onopen = function () {
-      //   console.log('connection opened.');
-      // };
 
       eventSource.onmessage = function (event) {
         const e = JSON.parse(event.data)
@@ -86,13 +68,23 @@
         const level = e.payload.body.level
         const title = `${projectName.toUpperCase()} (${level})`
         if (notificationsEnabled) {
-
-          // const n = new Notification(title, { body: message, actions: [{ action: "relay", title: "Relay" }] });
-          // console.log("Dispatched notification", n)
-          notify()
+          navigator.serviceWorker.ready.then((registration) => {
+            console.log("on service worker notify")
+            // https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerRegistration/showNotification
+            registration.showNotification(title, {
+              body: message,
+              icon: "/static/favicon.ico",
+              badge: "/static/favicon.ico",
+              data: {url: `${self.location.origin}/api/event/${e.event_id}`, event: e},
+              tag: "test-tag",
+              actions: [{
+                action: "relay",
+                title:"Relay"
+              }]
+            });
+          });
         }
-        console.log("Should reload here")
-        // window.location.reload();
+        window.location.reload();
       };
     })
   </script>

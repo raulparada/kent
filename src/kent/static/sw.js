@@ -1,40 +1,41 @@
-self.addEventListener("install", e => {
-    console.log("[ServiceWorker] - Install");
+/*
+    Kent notifications ServiceWorker.
+*/
+
+self.addEventListener("install", event => {
+    console.log("[kent notifications sw] Installed");
 });
 
-self.addEventListener("activate", e => {
-    console.log("[ServiceWorker] - Activate");
-    // e.waitUntil((async () => {
-    //     // Get a list of all your caches in your app
-    //     const keyList = await caches.keys();
-    //     await Promise.all(
-    //         keyList.map(key => {
-    //             console.log(key);
-    //             /* 
-    //                Compare the name of your current cache you are iterating through
-    //                and your new cache name
-    //             */
-    //             if (key !== cacheName) {
-    //                 console.log("[ServiceWorker] - Removing old cache", key);
-    //                 return caches.delete(key);
-    //             }
-    //         })
-    //     );
-    // })());
-    // e.waitUntil(self.clients.claim());
+self.addEventListener("activate", event => {
+    console.log("[kent notifications sw] Activated");
 });
-
-self.addEventListener("change", e => {
-    console.log("[ServiceWorker] - change");
-})
-self.addEventListener("*", e => {
-    console.log("[ServiceWorker] - *");
-})
-
-self.addEventListener("message", e => {
-    console.log("message", e.data)
-})
 
 self.onnotificationclick = (event) => {
-    console.log("Notification clicked")
+    console.log("Notification clicked", event)
+    event.notification.close();
+
+    const eventUrl = event.notification.data.url;
+    let targetUrl;
+    switch (event.action) {
+        case "relay":
+            targetUrl = eventUrl + "/relay";
+            break;
+        default:
+            targetUrl = eventUrl
+    }
+    event.waitUntil(
+        clients.matchAll({ type: "window" }).then((clientsArr) => {
+            // If a Window tab matching the targeted URL already exists, focus that;
+            const hadWindowToFocus = clientsArr.some((windowClient) =>
+                windowClient.url === targetUrl
+                    ? (windowClient.focus(), true)
+                    : false,
+            );
+            // Otherwise, open a new tab to the applicable URL and focus it.
+            if (!hadWindowToFocus)
+                clients
+                    .openWindow(targetUrl)
+                    .then((windowClient) => (windowClient ? windowClient.focus() : null));
+        }),
+    );
 };

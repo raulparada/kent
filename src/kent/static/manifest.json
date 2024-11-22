@@ -1,0 +1,17 @@
+{
+    "name": "kent",
+    "short_name": "kent",
+    "description": "Fake Sentry",
+    "start_url": "/",
+    "id": "/",
+    "display": "standalone",
+    "prefer_related_applications": false,
+    "icons": [
+        {
+            "src": "/static/pngtest.png",
+            "sizes": "256x256",
+            "type": "image/png",
+            "purpose": "any"
+        }
+    ]
+}
