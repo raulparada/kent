@@ -4,6 +4,7 @@ include *.rst
 include Dockerfile
 include requirements-dev.txt
 recursive-include bin *.py
+recursive-include src *.js
 recursive-include src *.css
 recursive-include src *.html
 recursive-include src *.ico

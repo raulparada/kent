@@ -111,15 +111,11 @@ class CorsMiddleware:
 
     def __call__(self, environ, start_response):
         def cors_response(status: str, response_headers: list, exc_info=None):
-            request = Request(environ)
-            if request.method == "OPTIONS":
-                response_headers.append(("Access-Control-Allow-Origin", "*"))
+            response_headers.append(("Access-Control-Allow-Origin", "*"))
+            if Request(environ).method == "OPTIONS":
                 response_headers.append(("Access-Control-Allow-Headers", "*"))
                 response_headers.append(("Access-Control-Allow-Methods", "*"))
-            else:
-                response_headers.append(("Access-Control-Allow-Origin", "*"))
             return start_response(status, response_headers, exc_info)
-
         return self.app(environ, cors_response)
 
 

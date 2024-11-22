@@ -17,7 +17,7 @@ from logging.config import dictConfig
 from typing import Optional, Union
 
 import requests
-from flask import Flask, Response, render_template, request
+from flask import Flask, Response, render_template, request, send_from_directory
 
 from kent import __version__
 from kent.utils import CorsMiddleware, parse_envelope, sentry_dsn_to_envelope_url
@@ -290,6 +290,7 @@ def create_app(test_config=None):
         logging.getLogger("kent").setLevel(logging.DEBUG)
         app.logger.debug("Dev mode on.")
 
+
     @app.route("/", methods=["GET"])
     def index_view():
         host = request.scheme + "://" + request.headers["host"]
@@ -306,6 +307,14 @@ def create_app(test_config=None):
             notifications=has_notifications_enabled,
             version=__version__,
         )
+
+    @app.route("/static/sw.js")
+    def static_service_worker():
+        """Serve the (notifications) service worker with the appropriate headers"""
+        response = send_from_directory("static", "sw.js")
+        response.mimetype = "text/javascript"
+        response.headers.update({"Service-Worker-Allowed": "/"})
+        return response
 
     @app.route("/sse/events")
     def sse_events():
