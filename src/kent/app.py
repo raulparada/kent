@@ -174,6 +174,7 @@ class EventManager:
     def get_queue(self):
         while not self.queue.empty():
             event = self.queue.get()
+            # SSE-format, do not modify.
             yield f"data: {json.dumps(event.to_dict())}\n\n"
 
     def flush(self):
@@ -189,6 +190,7 @@ INTERESTING_HEADERS = [
 ]
 
 
+# FIXME Make into manager class.
 Project = namedtuple("Project", ["kent_project_id", "kent_alias", "sentry_dsn"])
 PROJECTS: dict[str, Project] = {}
 projects_file_env = os.environ.get("KENT_PROJECTS_FILE")
@@ -318,7 +320,8 @@ def create_app(test_config=None):
 
     @app.route("/sse/events")
     def sse_events():
-        LOGGER.info("Handling sse context.")
+        """Serve new events"""
+        LOGGER.debug("Handling sse context.")
         return Response(EVENTS.get_queue(), mimetype="text/event-stream")
 
     @app.route("/api/event/<event_id>", methods=["GET"])

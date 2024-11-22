@@ -16,22 +16,15 @@
     if (!("Notification" in window)) {
       alert("This browser does not support desktop notifications! consider Chrome.");
     }
-    const notificationsEnabled = {{ notifications| tojson }}
-    const projects = JSON.parse(`{{ projects|tojson }}`)
-
-
     navigator.serviceWorker.register("{{ url_for('static', filename='sw.js') }}", {scope: "/"}).then((registration)=> {
       console.log('finished service worker registration.', registration);
     });
 
-    function notify() {
-      console.log("on function notify")
-      
-    }
 
-
-    console.log("Notifications:", notificationsEnabled)
-    console.log("Projects:", projects)
+    const notificationsEnabled = {{ notifications| tojson }};
+    console.log("Notifications:", notificationsEnabled);
+    const projects = JSON.parse(`{{ projects|tojson }}`);
+    console.log("Projects:", projects);
 
     if (notificationsEnabled && Notification.permission !== "granted") {
       Notification.requestPermission();
@@ -56,7 +49,6 @@
     }
 
     document.addEventListener('DOMContentLoaded', function () {
-
       const eventSource = new EventSource('/sse/events');
 
       eventSource.onmessage = function (event) {
@@ -66,17 +58,17 @@
         const projectName = project[1]
         const message = e.payload.body.message
         const level = e.payload.body.level
-        const title = `${projectName.toUpperCase()} (${level})`
+        const title = `${level.toUpperCase()} @${projectName}`
         if (notificationsEnabled) {
           navigator.serviceWorker.ready.then((registration) => {
             console.log("on service worker notify")
             // https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerRegistration/showNotification
             registration.showNotification(title, {
               body: message,
-              icon: "/static/favicon.ico",
+              // icon: "/static/favicon.ico",
               badge: "/static/favicon.ico",
               data: {url: `${self.location.origin}/api/event/${e.event_id}`, event: e},
-              tag: "test-tag",
+              tag: e.event_id, // TODO: add stacking option.
               actions: [{
                 action: "relay",
                 title:"Relay"
