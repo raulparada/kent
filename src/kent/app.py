@@ -305,7 +305,9 @@ def create_app(test_config=None):
             dsn=dsn,
             dsn_example=dsn_example,
             events=EVENTS.get_events(),
-            projects=list(PROJECTS.values()),
+            projects=PROJECTS,
+            # FIXME deduplicate this.
+            projects_list=list(PROJECTS.values()),
             notifications=has_notifications_enabled,
             version=__version__,
         )

@@ -54,7 +54,7 @@
       eventSource.onmessage = function (event) {
         const e = JSON.parse(event.data)
         console.log("New event", e);
-        const project = projects.find(p => p[0] === e.project_id)
+        const project = projects[e.project_id]
         const projectName = project[1]
         const message = e.payload.body.message
         const level = e.payload.body.level
@@ -120,8 +120,11 @@
         {% for event in events %}
         <tr>
           <td scope="row"><small>{{ event.timestamp }}</small></td>
-          <td class="nowrap"><small><a href="/api/event/{{ event.event_id }}">{{ event.project_id }}: {{ event.event_id
-                }}</a><small></td>
+          {% if projects %}
+          <td class="nowrap"><small><a href="/api/event/{{ event.event_id }}">{{ projects[event.project_id][1] }}: {{ event.event_id }}</a><small></td>
+          {% else %}
+          <td class="nowrap"><small><a href="/api/event/{{ event.event_id }}">{{ event.project_id }}: {{ event.event_id }}</a><small></td>
+          {% endif %}
           <td><small>{{ event.summary }}</small></td>
         </tr>
         {% endfor %}
@@ -129,23 +132,21 @@
     </table>
     {% endif %}
 
-    {% if projects %}
+    {% if projects_list %}
     <h2>Projects</h2>
     <table class="summary" role="grid">
       <thead>
         <tr>
-          <th scope="col">kent_project_id</th>
-          <th scope="col">kent_dsn</th>
           <th scope="col">kent_alias</th>
+          <th scope="col">kent_dsn</th>
           <th scope="col">sentry_dsn</th>
         </tr>
       </thead>
       <tbody>
-        {% for project in projects %}
+        {% for project in projects_list %}
         <tr>
-          <td scope="row"><small>{{ project.kent_project_id }}</small></td>
-          <td scope="row"><small>{{ dsn }}/{{ project.kent_project_id }}</small></td>
           <td class="nowrap"><small>{{ project.kent_alias }}<small></td>
+          <td scope="row"><small>{{ dsn }}/{{ project.kent_project_id }}</small></td>
           <td><small>{{ project.sentry_dsn }}</small></td>
         </tr>
         {% endfor %}
