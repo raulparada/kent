@@ -16,10 +16,10 @@
     if (!("Notification" in window)) {
       alert("This browser does not support desktop notifications! consider Chrome.");
     }
+    // FIXME: revise if *always* needed.
     navigator.serviceWorker.register("{{ url_for('static', filename='sw.js') }}", {scope: "/"}).then((registration)=> {
       console.log('finished service worker registration.', registration);
     });
-
 
     const notificationsEnabled = {{ notifications| tojson }};
     console.log("Notifications:", notificationsEnabled);
@@ -27,6 +27,7 @@
     console.log("Projects:", projects);
 
     if (notificationsEnabled && Notification.permission !== "granted") {
+      console.log("Requesting notification permission.")
       Notification.requestPermission();
     }
 
@@ -111,7 +112,7 @@
     <table class="summary" role="grid">
       <thead>
         <tr>
-          <th scope="col">timestamp</th>
+          <th scope="col">timestamp ▿</th>
           <th scope="col">project: event id</th>
           <th scope="col">summary</th>
         </tr>

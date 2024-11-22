@@ -168,8 +168,10 @@ class EventManager:
                 return event
         return None
 
-    def get_events(self):
-        return self.events
+    def get_events(self, sort=False):
+        if not sort:
+            return self.events
+        return sorted(self.events, key=lambda event: event.timestamp, reverse=True)
 
     def get_queue(self):
         while not self.queue.empty():
@@ -304,7 +306,7 @@ def create_app(test_config=None):
             host=host,
             dsn=dsn,
             dsn_example=dsn_example,
-            events=EVENTS.get_events(),
+            events=EVENTS.get_events(sort=True),
             projects=PROJECTS,
             # FIXME deduplicate this.
             projects_list=list(PROJECTS.values()),
