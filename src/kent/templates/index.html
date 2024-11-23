@@ -21,7 +21,7 @@
       console.log('finished service worker registration.', registration);
     });
 
-    const notificationsEnabled = {{ notifications| tojson }};
+    const notificationsEnabled = {{ notifications|tojson }};
     console.log("Notifications:", notificationsEnabled);
     const projects = JSON.parse(`{{ projects|tojson }}`);
     console.log("Projects:", projects);
@@ -51,25 +51,25 @@
 
     document.addEventListener('DOMContentLoaded', function () {
       const eventSource = new EventSource('/sse/events');
-
-      eventSource.onmessage = function (event) {
-        const e = JSON.parse(event.data)
-        console.log("New event", e);
-        const project = projects[e.project_id]
-        const projectName = project[1]
-        const message = e.payload.body.message
-        const level = e.payload.body.level
-        const title = `${level.toUpperCase()} @${projectName}`
+      eventSource.onmessage = function (sseEvent) {
+        const event = JSON.parse(sseEvent.data)
+        console.log("New event", event);
+        const message = event.payload.body.message;
+        const level = event.payload.body.level;
+        const transaction = event.payload.body.transaction;
+        const projectId = event.project_id
+        const projectName = projects[projectId]? projects[projectId][1] : projectId;
+        const title = `${level.toUpperCase()} @${projectName}`;
         if (notificationsEnabled) {
           navigator.serviceWorker.ready.then((registration) => {
-            console.log("on service worker notify")
+            console.log("on service worker notify");
             // https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerRegistration/showNotification
             registration.showNotification(title, {
               body: message,
               icon: "/static/favicon.ico",
               badge: "/static/favicon.ico",
-              data: {url: `${self.location.origin}/api/event/${e.event_id}`, event: e},
-              tag: e.event_id, // TODO: add stacking option.
+              data: {url: `${self.location.origin}/api/event/${event.event_id}`, event: event},
+              tag: event.event_id, // TODO: add stacking option.
               actions: [{
                 action: "relay",
                 title:"Relay"
@@ -114,6 +114,7 @@
         <tr>
           <th scope="col">timestamp ▿</th>
           <th scope="col">project: event id</th>
+          <th scope="col">transaction</th>
           <th scope="col">summary</th>
         </tr>
       </thead>
@@ -121,12 +122,13 @@
         {% for event in events %}
         <tr>
           <td scope="row"><small>{{ event.timestamp }}</small></td>
-          {% if projects %}
+          {% if event.project_id in projects %}
           <td class="nowrap"><small><a href="/api/event/{{ event.event_id }}">{{ projects[event.project_id][1] }}: {{ event.event_id }}</a><small></td>
           {% else %}
           <td class="nowrap"><small><a href="/api/event/{{ event.event_id }}">{{ event.project_id }}: {{ event.event_id }}</a><small></td>
-          {% endif %}
-          <td><small>{{ event.summary }}</small></td>
+            {% endif %}
+            <td><small>{{ event.body.transaction }}</small></td>
+            <td><small>{{ event.summary }}</small></td>
         </tr>
         {% endfor %}
       </tbody>
