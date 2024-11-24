@@ -8,27 +8,25 @@
   <title>Kent: Fake Sentry</title>
   <link rel="manifest" href="/static/manifest.json" />
   <link rel="icon" type="image/png" href="/static/favicon.ico" />
-  <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.ico') }}" />
   <link rel="stylesheet" type="text/css" href="/static/pico.1.5.3.min.css" />
   <link rel="stylesheet" type="text/css" href="/static/style.css" />
-  <script src="{{ url_for('static', filename='sw.js') }}"></script>
   <script>
-    if (!("Notification" in window)) {
-      alert("This browser does not support desktop notifications! consider Chrome.");
-    }
-    // FIXME: revise if *always* needed.
-    navigator.serviceWorker.register("{{ url_for('static', filename='sw.js') }}", {scope: "/"}).then((registration)=> {
-      console.log('finished service worker registration.', registration);
-    });
-
-    const notificationsEnabled = {{ notifications|tojson }};
-    console.log("Notifications:", notificationsEnabled);
-    const projects = JSON.parse(`{{ projects|tojson }}`);
-    console.log("Projects:", projects);
-
-    if (notificationsEnabled && Notification.permission !== "granted") {
-      console.log("Requesting notification permission.")
-      Notification.requestPermission();
+    if ("serviceWorker" in navigator) {
+      try {
+        navigator.serviceWorker.register("/static/sw.js", {
+          scope: "/",
+        }).then(registration => {
+          if (registration.installing) {
+            console.log("Service worker installing");
+          } else if (registration.waiting) {
+            console.log("Service worker installed", registration);
+          } else if (registration.active) {
+            console.log("Service worker active");
+          }
+        });
+      } catch (error) {
+        console.error(`Registration failed with ${error}`);
+      }
     }
 
     function flush() {
@@ -49,30 +47,39 @@
       };
     }
 
+    const notificationsEnabled = {{ notifications| tojson }};
+    if (notificationsEnabled && Notification.permission !== "granted") {
+      console.log("Requesting notification permission.")
+      Notification.requestPermission();
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
+      const projects = JSON.parse(`{{ projects|tojson }}`);
+
+      // Open SSE stream.
       const eventSource = new EventSource('/sse/events');
       eventSource.onmessage = function (sseEvent) {
-        const event = JSON.parse(sseEvent.data)
-        console.log("New event", event);
-        const message = event.payload.body.message;
-        const level = event.payload.body.level;
-        const transaction = event.payload.body.transaction;
-        const projectId = event.project_id
-        const projectName = projects[projectId]? projects[projectId][1] : projectId;
-        const title = `${level.toUpperCase()} @${projectName}`;
         if (notificationsEnabled) {
+          const event = JSON.parse(sseEvent.data);
+          const message = event.payload.body.message;
+          const level = event.payload.body.level;
+          const transaction = event.payload.body.transaction;
+          const projectId = event.project_id
+          const projectName = projects[projectId] ? projects[projectId][1] : projectId;
+          const title = `${level.toUpperCase()} @${projectName}`;
           navigator.serviceWorker.ready.then((registration) => {
             console.log("on service worker notify");
+            
             // https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerRegistration/showNotification
             registration.showNotification(title, {
               body: message,
               icon: "/static/favicon.ico",
               badge: "/static/favicon.ico",
-              data: {url: `${self.location.origin}/api/event/${event.event_id}`, event: event},
+              data: { url: `${self.location.origin}/api/event/${event.event_id}`, event: event },
               tag: event.event_id, // TODO: add stacking option.
               actions: [{
                 action: "relay",
-                title:"Relay"
+                title: "Relay"
               }]
             });
           });
@@ -123,12 +130,14 @@
         <tr>
           <td scope="row"><small>{{ event.timestamp }}</small></td>
           {% if event.project_id in projects %}
-          <td class="nowrap"><small><a href="/api/event/{{ event.event_id }}">{{ projects[event.project_id][1] }}: {{ event.event_id }}</a><small></td>
+          <td class="nowrap"><small><a href="/api/event/{{ event.event_id }}">{{ projects[event.project_id][1] }}: {{
+                event.event_id }}</a><small></td>
           {% else %}
-          <td class="nowrap"><small><a href="/api/event/{{ event.event_id }}">{{ event.project_id }}: {{ event.event_id }}</a><small></td>
-            {% endif %}
-            <td><small>{{ event.body.transaction }}</small></td>
-            <td><small>{{ event.summary }}</small></td>
+          <td class="nowrap"><small><a href="/api/event/{{ event.event_id }}">{{ event.project_id }}: {{ event.event_id
+                }}</a><small></td>
+          {% endif %}
+          <td><small>{{ event.body.transaction }}</small></td>
+          <td><small>{{ event.summary }}</small></td>
         </tr>
         {% endfor %}
       </tbody>
