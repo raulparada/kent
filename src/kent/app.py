@@ -252,7 +252,7 @@ INTERESTING_HEADERS = [
 # FIXME Make into manager class.
 Project = namedtuple("Project", ["kent_project_id", "kent_alias", "sentry_dsn"])
 PROJECTS: dict[str, Project] = {}
-projects_file_env = os.environ.get("KENT_PROJECTS_FILE")
+projects_file_env = os.environ.get("KENT_PROJECTS_CONFIG")
 if projects_file_env:
     projects_file = pathlib.Path(projects_file_env)
 else:
