@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from logging.config import dictConfig
 from typing import Optional, Union
 
+import brotli
 import requests
 from flask import Flask, Response, render_template, request, send_from_directory
 
@@ -451,7 +452,9 @@ def create_app(test_config=None):
         log_headers(dev_mode, request_id, request.headers)
 
         # Decompress it
-        if request.headers.get("content-encoding") == "gzip":
+        if request.headers.get("content-encoding") == "br":
+            body = brotli.decompress(request.data)
+        elif request.headers.get("content-encoding") == "gzip":
             body = gzip.decompress(request.data)
         elif request.headers.get("content-encoding") == "deflate":
             body = zlib.decompress(request.data)
