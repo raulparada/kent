@@ -13,4 +13,4 @@ RUN groupadd -r kent && useradd --no-log-init -r -g kent kent
 USER kent
 
 ENTRYPOINT ["/usr/local/bin/kent-server"]
-CMD ["run"]
+CMD ["run", "--host", "0.0.0.0"]
