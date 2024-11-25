@@ -160,17 +160,16 @@ class Event:
             envelope_url,
         )
 
-        # Seems weird having to use these defaults, but it's apparently needed.
-        event_header = self.header or {"type": "event"}
-        event_envelope_header = self.envelope_header or {"type": "event"}
+        if self.header or self.envelope_header:
+            LOGGER.warning(f"Discarding event header {self.header}")
+            LOGGER.warning(f"Discarding event enveloper header {self.envelope_header}")
+        # Ideally would forward the exact original event but didn't manage at this point.
+        # Also haven't yet figured out what info is missed by using these empty headers.
+        event_header = {"type": "event"}
+        event_envelope_header = {"type": "event"}
         event_body = self.body or {}
 
         data = f"{json.dumps(event_envelope_header)}\n{json.dumps(event_header)}\n{json.dumps(event_body)}"
-        LOGGER.debug(
-            "event_envelope_header=%s, event_header=%s",
-            event_envelope_header,
-            event_header,
-        )
         relay_response = requests.post(
             envelope_url,
             headers=event_header,
@@ -180,7 +179,7 @@ class Event:
             if relay_response.json().get("id"):
                 self.relayed = True
             else:
-                LOGGER.error("Relay returned no id (means likely not ingested).")
+                LOGGER.error("Relay returned no id; this means likely not ingested.")
         LOGGER.info(
             "%s: relay response envelope=%s, status=%s, content=%s",
             self.event_id,
