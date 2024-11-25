@@ -468,7 +468,8 @@ def create_app(test_config=None):
 
             item_type = item.header.get("type")
             LOGGER.debug("%s: type: %s", event_id, item_type)
-            if item_type in ("client_report", "sessions"):
+            # Move these types into config file.
+            if item_type in ("client_report", "sessions", "transaction"):
                 if os.environ.get("KENT_IGNORE_REPORTS", "1") == "1":
                     LOGGER.warning(
                         "%s: ignoring report of type `%s`", event_id, item_type
