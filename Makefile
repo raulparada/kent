@@ -1,5 +1,8 @@
 DEFAULT_GOAL := help
 PROJECT=kent
+DOCKER_USER=pabloparadaroca
+TAG=${PROJECT}:latest
+IMAGE_NAME=${DOCKER_USER}/${TAG}
 
 .PHONY: help
 help:
@@ -40,3 +43,8 @@ clean:  ## Clean build artifacts
 testdocker:  ## Build Docker image and run it
 	docker build --no-cache -t kent:latest .
 	docker run --init --rm --publish 14765:14765 kent:latest run --host 0.0.0.0 --port 14765
+
+.PHONY: publish
+publish:  ## Build Docker image and run it
+	docker build -t ${IMAGE_NAME} . 
+	docker push ${IMAGE_NAME}
