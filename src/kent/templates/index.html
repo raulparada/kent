@@ -74,6 +74,7 @@
             registration.showNotification(title, {
               body: message,
               icon: "/static/favicon.ico",
+              image: "/static/favicon.ico",
               badge: "/static/favicon.ico",
               data: { url: `${self.location.origin}/api/event/${event.event_id}`, event: event },
               tag: event.event_id, // TODO: add stacking option.
