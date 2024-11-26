@@ -59,6 +59,7 @@
       // Open SSE stream.
       const eventSource = new EventSource('/sse/events');
       eventSource.onmessage = function (sseEvent) {
+        console.log(`[sse] Event ${sseEvent.data}`)        
         if (notificationsEnabled) {
           const event = JSON.parse(sseEvent.data);
           const message = event.payload.body.message;
@@ -124,6 +125,7 @@
           <th scope="col">project: event id</th>
           <th scope="col">transaction</th>
           <th scope="col">summary</th>
+          <th scope="col">status</th>
         </tr>
       </thead>
       <tbody>
@@ -131,14 +133,21 @@
         <tr>
           <td scope="row"><small>{{ event.timestamp }}</small></td>
           {% if event.project_id in projects %}
-          <td class="nowrap"><small><a href="/api/event/{{ event.event_id }}">{{ projects[event.project_id][1] }}: {{
-                event.event_id }}</a><small></td>
+          <td class="nowrap"><small>
+            <a href="/api/event/{{ event.event_id }}">{{ projects[event.project_id][1] }}: {{event.event_id }}</a>
+          <small></td>
           {% else %}
-          <td class="nowrap"><small><a href="/api/event/{{ event.event_id }}">{{ event.project_id }}: {{ event.event_id
-                }}</a><small></td>
+          <td class="nowrap"><small>
+            <a href="/api/event/{{ event.event_id }}">{{ event.project_id }}: {{ event.event_id}}</a>
+          <small></td>
           {% endif %}
           <td><small>{{ event.body.transaction }}</small></td>
           <td><small>{{ event.summary }}</small></td>
+          {% if event.relayed %}
+          <td><small>relayed</small></td>
+          {% else %}
+          <td class="nowrap"><small><a href="/api/event/{{ event.event_id }}/relay">relay</a><small></td>
+          {% endif %}
         </tr>
         {% endfor %}
       </tbody>

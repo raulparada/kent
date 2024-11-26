@@ -147,6 +147,7 @@ class Event:
                 "header": self.header,
                 "body": self.body,
             },
+            "relayed": self.relayed,
         }
 
     def relay(self) -> Response:
@@ -512,7 +513,7 @@ def create_app(test_config=None):
             app.logger.info("%s: project id: %s", event_id, project_id)
             app.logger.info("%s: url: %s", event_id, event_url)
 
-        return {"success": True}
+        return {"success": True, "id": request_id}
 
     @app.route("/api/<int:project_id>/security/", methods=["POST"])
     def security_view(project_id):
