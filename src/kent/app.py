@@ -123,9 +123,20 @@ class Event:
         return "no summary"
 
     @property
-    def timestamp(self):
-        # NOTE(willkg): timestamp is a string
-        return self.body.get("timestamp") or str(datetime.datetime.now())
+    def timestamp(self) -> str:
+        original = self.body.get("timestamp")
+        if not original:
+            # Return 'now'
+            return datetime.datetime.now(datetime.UTC).isoformat()
+        if isinstance(original, float):
+            # Parse from timestamp.
+            return (
+                datetime.datetime.fromtimestamp(original, tz=datetime.UTC)
+                .isoformat()
+                .replace("+00:00", "Z")
+            )
+        # Return original string
+        return original
 
     def to_dict(self):
         return {
