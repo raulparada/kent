@@ -63,7 +63,7 @@
         if (notificationsEnabled) {
           const event = JSON.parse(sseEvent.data);
           const message = event.payload.body.message;
-          const level = event.payload.body.level || "error";
+          const level = event.payload.body.level || "event";
           const transaction = event.payload.body.transaction;
           const projectId = event.project_id
           const projectName = projects[projectId] ? projects[projectId][1] : projectId;

@@ -45,6 +45,7 @@ testdocker:  ## Build Docker image and run it
 	docker run --init --rm --publish 14765:14765 kent:latest run --host 0.0.0.0 --port 14765
 
 .PHONY: publish
-publish:  ## Build Docker image and run it
+publish:  ## Build Docker image and publish it
+	git tag latest --force
 	docker build -t ${IMAGE_NAME} . 
 	docker push ${IMAGE_NAME}
